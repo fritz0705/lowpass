@@ -19,6 +19,13 @@ fn mult_div(a: i32, b: i32, c: i32) -> i32 {
     }
 }
 
+fn mult_div2(a: i32, b: i32, c: i32) -> i32 {
+    match a.checked_mul(b) {
+        Some(ab) => ab/(c * c),
+        None => (a/c) * (b/c)
+    }
+}
+
 fn add_div(a: i32, b: i32, c: i32) -> i32 {
     match a.checked_add(b) {
         Some(ab) => ab/c,
@@ -38,8 +45,9 @@ impl Oscillator {
         //   { y0' = y1
         //   { y1' = x - zeta xi y1 - xi^2 y0
         // 4th order Runge--Kutta
-        let omega2 = (self.omega * self.omega) / 65536;
-        let omegazeta = (self.omega * self.zeta) / 65536;
+        //
+        let omega2 = mult_div2(self.omega, self.omega, 256);
+        let omegazeta = mult_div2(self.omega, self.zeta, 256);
         let k1_0 = state.y1;
         let k1_1 = x0 - mult_div(state.y1, omegazeta, 65536)
             - mult_div(state.y0, omega2, 65536);
