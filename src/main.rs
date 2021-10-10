@@ -3,36 +3,28 @@ use std::io::{self, Write};
 
 #[derive(Copy, Clone)]
 struct State {
-    base_osc: FM,
-    base_state: FMState
-}
-
-fn incr12(omega: i32) -> i32 {
-    (omega * 34716) / 32768
+    osc: Oscillator,
+    state: OscillatorState
 }
 
 impl State {
-    fn init() -> State{
-        let base_osc = FM {
-            carrier: Oscillator {
-                omega: incr12(incr12(incr12(incr12(incr12(incr12(incr12(incr12(incr12(incr12(incr12(incr12(3775)))))))))))),
-                zeta: 1
-            },
-            modulator: Oscillator::from_omega(3000),
-            index: 1024
+    fn init() -> State {
+        let osc = Oscillator {
+            omega: 171,
+            zeta: 0
         };
         State {
-            base_state: base_osc.initial_state(),
-            base_osc: base_osc
+            osc: osc,
+            state: osc.initial_state()
         }
     }
 
-    fn output(self) -> i32 {
-        self.base_state.y0
+    fn output(self) -> (i32, i32) {
+        (self.state.y0, self.state.y1)
     }
 
     fn step(mut self) -> State {
-        self.base_state = self.base_osc.step(self.base_state, 0);
+        self.state = self.osc.step(self.state, 0);
         self
     }
 }
@@ -44,7 +36,12 @@ fn main() {
 
     loop {
         state = state.step();
-        match handle.write_all(&state.output().to_le_bytes()) {
+        let (y0, y1) = state.output();
+        match handle.write_all(&y0.to_le_bytes()) {
+            Ok(_) => (),
+            Err(_) => break
+        }
+        match handle.write_all(&y1.to_le_bytes()) {
             Ok(_) => (),
             Err(_) => break
         }
