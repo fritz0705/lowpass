@@ -4,18 +4,18 @@ use std::io::{self, Write};
 #[derive(Copy, Clone)]
 struct State {
     osc: Oscillator,
-    state: OscillatorState
+    state: OscillatorState,
 }
 
 impl State {
     fn init() -> State {
         let osc = Oscillator {
-            omega: 171,
-            zeta: 0
+            omega: 3775,
+            zeta: 100,
         };
         State {
             osc: osc,
-            state: osc.initial_state()
+            state: osc.initial_state(),
         }
     }
 
@@ -25,6 +25,9 @@ impl State {
 
     fn step(mut self) -> State {
         self.state = self.osc.step(self.state, 0);
+        if self.state.y1.unsigned_abs() == 0 {
+            self.state = self.osc.initial_state();
+        }
         self
     }
 }
@@ -39,11 +42,11 @@ fn main() {
         let (y0, y1) = state.output();
         match handle.write_all(&y0.to_le_bytes()) {
             Ok(_) => (),
-            Err(_) => break
+            Err(_) => break,
         }
         match handle.write_all(&y1.to_le_bytes()) {
             Ok(_) => (),
-            Err(_) => break
+            Err(_) => break,
         }
     }
 }

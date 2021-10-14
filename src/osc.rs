@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::ops::{Add, Mul};
+use std::ops::{Div, Mul};
 
 #[derive(Debug, Copy, Clone)]
 pub struct OscillatorState {
@@ -20,22 +20,25 @@ fn mult_div(a: i32, b: i32, c: i32) -> i32 {
     }
 }
 
-#[inline]
-fn add_div(a: i32, b: i32, c: i32) -> i32 {
-    i32::try_from((i64::from(a) + i64::from(b)) / (i64::from(c)))
-        .unwrap_or(i32::MAX)
+pub fn mult3a(y: i32, omega: i32, zeta: i32) -> Option<i32> {
+    omega
+        .checked_mul(zeta)
+        .and_then(|omegazeta| (y >> 16).checked_mul(omegazeta))
+        .map(|yomegazeta| yomegazeta >> 16)
 }
 
-pub fn mult3x(y: i32, omega: i32, zeta: i32) -> i32 {
+#[inline]
+pub fn mult3(y: i32, omega: i32, zeta: i32) -> i32 {
     let y = i64::from(y);
     let omega = i64::from(omega);
     let zeta = i64::from(zeta);
-    let res = y.checked_mul(omega)
+    let res = y
+        .checked_mul(omega)
         .and_then(|yomega| yomega.checked_mul(zeta))
         .map(|yomegazeta| yomegazeta >> 32);
     match res {
         Some(yomegazeta) => i32::try_from(yomegazeta).unwrap_or(0),
-        None => 0
+        None => 0,
     }
 }
 
@@ -54,33 +57,35 @@ impl Oscillator {
         //
         let k1_0 = state.y1;
         let k1_1 = x0
-            .wrapping_sub(mult3x(state.y1, self.omega, self.zeta))
-            .wrapping_sub(mult3x(state.y0, self.omega, self.omega));
+            .wrapping_sub(mult3(state.y1, self.omega, self.zeta))
+            .wrapping_sub(mult3(state.y0, self.omega, self.omega));
         let k2_0 = k1_0.wrapping_add(k1_1 / 2);
-        let k2_1 = x0
-            .wrapping_sub(mult3x(state.y1, self.omega, self.zeta))
-            .wrapping_sub(mult3x(k1_1 / 2, self.omega, self.zeta))
-            .wrapping_sub(mult3x(state.y0, self.omega, self.omega))
-            .wrapping_sub(mult3x(k1_0 / 2, self.omega, self.omega));
+        let k2_1 = k1_1
+            .wrapping_sub(mult3(k1_1 / 2, self.omega, self.zeta))
+            .wrapping_sub(mult3(k1_0 / 2, self.omega, self.omega));
         let k3_0 = k1_0.wrapping_add(k2_1 / 2);
-        let k3_1 = x0
-            .wrapping_sub(mult3x(state.y1, self.omega, self.zeta))
-            .wrapping_sub(mult3x(k2_1 / 2, self.omega, self.zeta))
-            .wrapping_sub(mult3x(state.y0, self.omega, self.omega))
-            .wrapping_sub(mult3x(k2_0 / 2, self.omega, self.omega));
+        let k3_1 = k1_1
+            .wrapping_sub(mult3(k2_1 / 2, self.omega, self.zeta))
+            .wrapping_sub(mult3(k2_0 / 2, self.omega, self.omega));
         let k4_0 = k1_0.wrapping_add(k3_1);
-        let k4_1 = x0
-            .wrapping_sub(mult3x(state.y1, self.omega, self.zeta))
-            .wrapping_sub(mult3x(k3_1, self.omega, self.zeta))
-            .wrapping_sub(mult3x(state.y0, self.omega, self.omega))
-            .wrapping_sub(mult3x(k3_0, self.omega, self.omega));
-        OscillatorState {
-            y0: state
-                .y0
-                .wrapping_add(add_div(k1_0, k4_0, 3))
-                .wrapping_add(add_div(k2_0, k3_0, 6)),
-            y1: state.y1 + (add_div(k1_1, k4_1, 3)) + (add_div(k2_1, k3_1, 6)),
-        }
+        let k4_1 = k1_1
+            .wrapping_sub(mult3(k3_1, self.omega, self.zeta))
+            .wrapping_sub(mult3(k3_0, self.omega, self.omega));
+        let y0 = state.y0.wrapping_add(
+            k1_0.wrapping_add(k4_0)
+                .wrapping_mul(2)
+                .wrapping_add(k2_0)
+                .wrapping_add(k3_0)
+                .div(6),
+        );
+        let y1 = state.y1.wrapping_add(
+            k1_1.wrapping_add(k4_1)
+                .wrapping_mul(2)
+                .wrapping_add(k2_1)
+                .wrapping_add(k3_1)
+                .div(6),
+        );
+        OscillatorState { y0: y0, y1: y1 }
     }
 
     pub fn many_steps(&self, mut state: OscillatorState, x0s: Vec<i32>) -> Vec<OscillatorState> {
@@ -94,8 +99,8 @@ impl Oscillator {
 
     pub fn initial_state(&self) -> OscillatorState {
         OscillatorState {
-            y0: i32::MAX / 5 * 4,
-            y1: 0,
+            y0: 0,
+            y1: i32::MAX.div(65536).mul(self.omega),
         }
     }
 }
