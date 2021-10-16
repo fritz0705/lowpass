@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::ops::{Div, Mul};
+use std::ops::{Div, Mul, Shr};
 
 #[derive(Debug, Copy, Clone)]
 pub struct OscillatorState {
@@ -20,26 +20,18 @@ fn mult_div(a: i32, b: i32, c: i32) -> i32 {
     }
 }
 
-pub fn mult3a(y: i32, omega: i32, zeta: i32) -> Option<i32> {
-    omega
-        .checked_mul(zeta)
-        .and_then(|omegazeta| (y >> 16).checked_mul(omegazeta))
-        .map(|yomegazeta| yomegazeta >> 16)
+#[inline]
+pub fn fmul(y: i32, omega: i32) -> Option<i32> {
+    let ylz = y.unsigned_abs().leading_zeros();
+    let omegalz = omega.unsigned_abs().leading_zeros();
+    let shr = (i32::BITS + 1).checked_sub(ylz + omegalz).unwrap_or(0)
+        .min(16);
+    y.shr(shr).checked_mul(omega).map(|yomega| yomega.shr(16 - shr))
 }
 
 #[inline]
 pub fn mult3(y: i32, omega: i32, zeta: i32) -> i32 {
-    let y = i64::from(y);
-    let omega = i64::from(omega);
-    let zeta = i64::from(zeta);
-    let res = y
-        .checked_mul(omega)
-        .and_then(|yomega| yomega.checked_mul(zeta))
-        .map(|yomegazeta| yomegazeta >> 32);
-    match res {
-        Some(yomegazeta) => i32::try_from(yomegazeta).unwrap_or(0),
-        None => 0,
-    }
+    fmul(y, omega).and_then(|yomega| fmul(yomega, zeta)).unwrap_or(i32::MAX * y.signum() * omega.signum() * zeta.signum())
 }
 
 impl Oscillator {
